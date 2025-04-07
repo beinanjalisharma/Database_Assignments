@@ -1,0 +1,275 @@
+<!-- payment.component.html -->
+<div class="payment-container">
+  <h2>Cash on Delivery Payment</h2>
+  
+  <form [formGroup]="paymentForm" (ngSubmit)="onSubmit()">
+    <div class="form-group">
+      <label for="fullName">Full Name</label>
+      <input type="text" id="fullName" formControlName="fullName" class="form-control">
+      <div *ngIf="hasError('fullName', 'required')" class="error-message">
+        Full name is required
+      </div>
+    </div>
+
+    <div class="form-group">
+      <label for="address">Address</label>
+      <input type="text" id="address" formControlName="address" class="form-control">
+      <div *ngIf="hasError('address', 'required')" class="error-message">
+        Address is required
+      </div>
+    </div>
+
+    <div class="row">
+      <div class="col-md-4">
+        <div class="form-group">
+          <label for="city">City</label>
+          <input type="text" id="city" formControlName="city" class="form-control">
+          <div *ngIf="hasError('city', 'required')" class="error-message">
+            City is required
+          </div>
+        </div>
+      </div>
+      
+      <div class="col-md-4">
+        <div class="form-group">
+          <label for="state">State</label>
+          <input type="text" id="state" formControlName="state" class="form-control">
+          <div *ngIf="hasError('state', 'required')" class="error-message">
+            State is required
+          </div>
+        </div>
+      </div>
+      
+      <div class="col-md-4">
+        <div class="form-group">
+          <label for="zipCode">ZIP Code</label>
+          <input type="text" id="zipCode" formControlName="zipCode" class="form-control">
+          <div *ngIf="hasError('zipCode', 'required')" class="error-message">
+            ZIP code is required
+          </div>
+          <div *ngIf="hasError('zipCode', 'pattern')" class="error-message">
+            Please enter a valid ZIP code
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="form-group">
+      <label for="phoneNumber">Phone Number</label>
+      <input type="tel" id="phoneNumber" formControlName="phoneNumber" class="form-control">
+      <div *ngIf="hasError('phoneNumber', 'required')" class="error-message">
+        Phone number is required
+      </div>
+      <div *ngIf="hasError('phoneNumber', 'pattern')" class="error-message">
+        Please enter a valid 10-digit phone number
+      </div>
+    </div>
+
+    <div class="form-group">
+      <label for="deliveryInstructions">Delivery Instructions (Optional)</label>
+      <textarea id="deliveryInstructions" formControlName="deliveryInstructions" class="form-control" rows="3"></textarea>
+    </div>
+
+    <div class="payment-method">
+      <div class="cod-info">
+        <h3>Cash on Delivery</h3>
+        <p>Pay with cash when your order is delivered to your doorstep.</p>
+      </div>
+    </div>
+
+    <div *ngIf="errorMessage" class="alert alert-danger">
+      {{ errorMessage }}
+    </div>
+
+    <div class="form-actions">
+      <button type="submit" class="btn btn-primary" [disabled]="isSubmitting">
+        <span *ngIf="isSubmitting">Processing...</span>
+        <span *ngIf="!isSubmitting">Place Order</span>
+      </button>
+    </div>
+  </form>
+</div>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+//payment service
+
+// payment.service.ts
+import { Injectable } from '@angular/core';
+import { HttpClient } from '@angular/common/http';
+import { Observable } from 'rxjs';
+import { environment } from '../../environments/environment';
+
+export interface CashOnDeliveryRequest {
+  fullName: string;
+  address: string;
+  city: string;
+  state: string;
+  zipCode: string;
+  phoneNumber: string;
+  deliveryInstructions?: string;
+  orderItems?: any[]; // You'd typically get this from a cart service
+  orderTotal?: number; // You'd typically get this from a cart service
+}
+
+export interface PaymentResponse {
+  success: boolean;
+  orderId: string;
+  estimatedDelivery: string;
+  message?: string;
+}
+
+@Injectable({
+  providedIn: 'root'
+})
+export class PaymentService {
+  private apiUrl = `${environment.apiUrl}/payments`;
+  
+  constructor(private http: HttpClient) { }
+
+  processCashOnDelivery(paymentDetails: CashOnDeliveryRequest): Observable<PaymentResponse> {
+    // You may want to add orderItems and orderTotal from your cart service
+    const cartService = window.localStorage.getItem('cartItems');
+    const cartTotal = window.localStorage.getItem('cartTotal');
+    
+    // Merge payment details with cart data
+    const requestPayload = {
+      ...paymentDetails,
+      orderItems: cartService ? JSON.parse(cartService) : [],
+      orderTotal: cartTotal ? parseFloat(cartTotal) : 0,
+      paymentMethod: 'CASH_ON_DELIVERY'
+    };
+    
+    return this.http.post<PaymentResponse>(`${this.apiUrl}/cod`, requestPayload);
+  }
+
+  // Method to get order status by order ID
+  getOrderStatus(orderId: string): Observable<any> {
+    return this.http.get(`${this.apiUrl}/orders/${orderId}`);
+  }
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+//order confirmation .ts
+
+
+// order-confirmation.component.ts
+import { Component, OnInit } from '@angular/core';
+import { Router } from '@angular/router';
+
+@Component({
+  selector: 'app-order-confirmation',
+  templateUrl: './order-confirmation.component.html',
+  styleUrls: ['./order-confirmation.component.scss']
+})
+export class OrderConfirmationComponent implements OnInit {
+  orderId: string = '';
+  estimatedDelivery: string = '';
+
+  constructor(private router: Router) {
+    // Get order data from router state
+    const navigation = this.router.getCurrentNavigation();
+    const state = navigation?.extras.state as {
+      orderId: string;
+      estimatedDelivery: string;
+    };
+
+    if (state) {
+      this.orderId = state.orderId;
+      this.estimatedDelivery = state.estimatedDelivery;
+    } else {
+      // If no state, redirect to home
+      this.router.navigate(['/']);
+    }
+  }
+
+  ngOnInit(): void {
+    // Clear the cart after successful order
+    window.localStorage.removeItem('cartItems');
+    window.localStorage.removeItem('cartTotal');
+  }
+
+  continueShopping(): void {
+    this.router.navigate(['/products']);
+  }
+
+  viewOrder(): void {
+    this.router.navigate(['/orders', this.orderId]);
+  }
+}
+
+
+
+
+//orderconfi.html
+<!-- order-confirmation.component.html -->
+<div class="confirmation-container">
+  <div class="success-message">
+    <div class="check-icon">
+      <i class="fa fa-check-circle"></i>
+    </div>
+    <h2>Order Placed Successfully!</h2>
+    <p>Your order has been confirmed and will be delivered soon.</p>
+  </div>
+
+  <div class="order-details">
+    <div class="detail-item">
+      <span class="label">Order ID:</span>
+      <span class="value">{{ orderId }}</span>
+    </div>
+    <div class="detail-item">
+      <span class="label">Payment Method:</span>
+      <span class="value">Cash on Delivery</span>
+    </div>
+    <div class="detail-item">
+      <span class="label">Estimated Delivery:</span>
+      <span class="value">{{ estimatedDelivery }}</span>
+    </div>
+  </div>
+
+  <div class="delivery-note">
+    <h3>Delivery Information</h3>
+    <p>Please keep the exact change ready for the delivery personnel.</p>
+    <p>You will receive an SMS notification before the delivery.</p>
+  </div>
+
+  <div class="action-buttons">
+    <button class="btn btn-primary" (click)="viewOrder()">View Order</button>
+    <button class="btn btn-secondary" (click)="continueShopping()">Continue Shopping</button>
+  </div>
+</div>
+
+
+
+
+
+
+
